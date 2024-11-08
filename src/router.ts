@@ -28,7 +28,6 @@ routes.map((route: any) => {
   const routeHandler = async (req: Request, res: Response) => {
     const body = {};
     const request = req as Req;
-    console.log(request.body);
     try {
       if (request.error) {
         return res.status(403).json({ error: request.error });

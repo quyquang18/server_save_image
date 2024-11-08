@@ -6,24 +6,33 @@ import sharp from "sharp";
 const crypto = require("crypto");
 const iconv = require("iconv-lite");
 export default class ImageService {
-  static getBase64Hash(base64Data: any) {
-    return crypto.createHash("md5").update(base64Data).digest("hex");
-  }
   static async getListImage(filePath: any, data: any) {
     console.log("test success");
     return "get success";
   }
 
   static async writeFileAsync(filePath: any, data: any) {
-    return new Promise((resolve, reject) => {
-      fs.writeFile(filePath, data, "base64", (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(true);
-        }
+    try {
+      return new Promise((resolve, reject) => {
+        // Decode base64 image
+        const imgBuffer = Buffer.from(data, "base64");
+        const ref = filePath + ".webp";
+        sharp(imgBuffer)
+          .toFile(ref)
+          .then(() => resolve(ref))
+          .catch((e) => reject(false));
+        // Resize the image and get the buffer
+        // const resizedBuffer = await sharp(imgBuffer)
+        //   .toFormat("webp") // Convert to webp format
+        //   .toBuffer();
+
+        // // Convert the buffer to base64 and return the result
+        // return `${resizedBuffer.toString("base64")}`;
       });
-    });
+    } catch (error) {
+      console.error("Error resizing and converting image:", error);
+      throw error;
+    }
   }
   static async writeFileExcelAsync(filePath: string, file: any) {
     try {
@@ -47,6 +56,9 @@ export default class ImageService {
       console.log(error);
     }
   }
+  static getBase64Hash(base64Data: any) {
+    return crypto.createHash("md5").update(base64Data).digest("hex");
+  }
   static async resizeImage(imageBuffer: any) {
     try {
       // Decode base64 image
@@ -66,10 +78,9 @@ export default class ImageService {
   }
   static async uploadImage({ redata, hostString }: Req) {
     const { imageBase64, filePath } = redata;
-    console.log("asdsda");
     try {
-      const regex = /([^\/]+)(?=\.(png|jpg|jpeg|gif|bmp|svg))/;
-      const regexPath = /^(.*\/)([^\/]+\.(png|jpg|jpeg|gif|bmp|svg))/;
+      const regex = /([^\/]+)(?=\.(png|jpg|jpeg|gif|webp|bmp|svg))/;
+      const regexPath = /^(.*\/)([^\/]+\.(png|jpg|jpeg|webp|gif|bmp|svg))/;
       const fileName = filePath.match(regex)[1];
       const uploadDir = "./storage/" + filePath.match(regexPath)[1];
       if (!fs.existsSync(uploadDir)) {
@@ -81,14 +92,11 @@ export default class ImageService {
       }
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
       const dataResise = await ImageService.resizeImage(base64Data);
-      const fileExtension = imageBase64.match(/^data:image\/(\w+);base64,/)[1];
       // Tính toán hash của file base64
       const fileHash = ImageService.getBase64Hash(dataResise);
-
       const existingFile = fs.readdirSync(uploadDir).find((file: any) => {
         try {
           const pathFile = path.join(uploadDir, file);
-
           // Check if the current item is a file and not a directory
           if (fs.statSync(pathFile).isFile()) {
             const fileContent = fs.readFileSync(pathFile); // Read as Buffer
@@ -108,23 +116,22 @@ export default class ImageService {
       });
       if (existingFile) {
         // Nếu file đã tồn tại, trả về đường dẫn của file đó
-        const imageUrl = `${hostString}/storage/${
+        const imageUrl = `${hostString}/storage/parts/${
           filePath.match(regexPath)[1]
         }${existingFile}`;
-
         return imageUrl;
       } else {
         // Nếu file chưa tồn tại
         const uniqueFileName = `${fileName || Date.now()}-${Math.round(
           Math.random() * 1e9
-        )}.${fileExtension}`;
+        )}`;
         const pathFile = path.join(uploadDir, uniqueFileName);
         const resWrite = await ImageService.writeFileAsync(
           pathFile,
-          dataResise
+          base64Data
         );
         if (resWrite) {
-          const imageUrl = `${hostString}/storage/${
+          const imageUrl = `${hostString}/storage/parts/${
             filePath.match(regexPath)[1]
           }${uniqueFileName}`;
           return imageUrl;
